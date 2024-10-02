@@ -61,6 +61,7 @@ jobs:
           push: true
           platforms: ${{ matrix.platform }}
           tags: ${{ steps.image-metadata.outputs.tags }}
+          context: .
           build-args: |
             --mount=source=dist,target=/dist
    
