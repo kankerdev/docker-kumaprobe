@@ -26,8 +26,6 @@ jobs:
   build-images:
     needs: [ build-wheel ]
     runs-on: ubuntu-latest
-    env:
-      DOCK
     strategy:
       fail-fast: true 
       matrix: 
@@ -56,6 +54,8 @@ jobs:
         with: 
           name: dist
           path: ./dist
+      - run: ls -lahn
+      - run: ls -lahn ./dist
       - uses: docker/build-push-action@v5
         with:
           push: true
