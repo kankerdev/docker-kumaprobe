@@ -54,17 +54,34 @@ async def check_active_services():
     return services
 
 
+async def check_swarm_mode():
+    """
+    Checks if Docker Swarm mode is active.
+    """
+    try:
+        swarm_info = client.swarm.attrs
+        swarm_state = swarm_info.get("State", {}).get("State", "inactive")
+        if swarm_state == "active":
+            logger.info("Swarm mode is active.")
+            return True
+        else:
+            logger.info("Swarm mode is inactive.")
+            return False
+    except Exception as e:
+        logger.error(f"Error checking swarm mode: {e}")
+        return False
+
+
 async def async_main():
-    swarm_checked = False
     detected_services = set()
     detected_containers = set()
 
-    # Initial check for swarm mode
-    swarm_info = client.swarm.attrs
-    swarm_state = swarm_info.get("State", {}).get("State", "inactive")
+    # Swarm mode check with logging
+    logger.info("Checking if Swarm mode is active.")
+    is_swarm_active = await check_swarm_mode()
 
-    if swarm_state == "active":
-        logger.info("Swarm mode is active. Checking services.")
+    if is_swarm_active:
+        logger.info("Checking services in Swarm mode.")
         services = await check_active_services()
 
         # Log initially detected services with labels starting with "kumaprobe"
@@ -79,13 +96,9 @@ async def async_main():
     for container in containers:
         labels = container.attrs.get("Config", {}).get("Labels", {})
         if any(label.startswith("kumaprobe") for label in labels):
-            if (
-                container.id not in detected_services
-            ):  # Skip if already tracked as a service
+            if container.id not in detected_services:  # Skip if already tracked as a service
                 detected_containers.add(container.id)
-                logger.info(
-                    f"Detected container with kumaprobe label: {container.name}"
-                )
+                logger.info(f"Detected container with kumaprobe label: {container.name}")
 
     while True:
         # Check for new containers
@@ -93,32 +106,27 @@ async def async_main():
         for container in current_containers:
             labels = container.attrs.get("Config", {}).get("Labels", {})
             if any(label.startswith("kumaprobe") for label in labels):
-                if (
-                    container.id not in detected_containers
-                    and container.id not in detected_services
-                ):
+                if container.id not in detected_containers and container.id not in detected_services:
                     detected_containers.add(container.id)
-                    logger.info(
-                        f"New container detected with kumaprobe label: {container.name}"
-                    )
+                    logger.info(f"New container detected with kumaprobe label: {container.name}")
 
         # Check health of all containers
         for container in current_containers:
             await check_health_and_send(container)
 
-        # Check for new services only once after the initial check
-        if swarm_state == "active" and not swarm_checked:
+        # Recheck swarm state and services (log every time for visibility)
+        logger.info("Rechecking if Swarm mode is active.")
+        is_swarm_active = await check_swarm_mode()
+
+        if is_swarm_active:
+            logger.info("Rechecking services in Swarm mode.")
             new_services = await check_active_services()
             for service in new_services:
                 labels = service.attrs.get("Spec", {}).get("Labels", {})
                 if any(label.startswith("kumaprobe") for label in labels):
                     if service.id not in detected_services:
                         detected_services.add(service.id)
-                        logger.info(
-                            f"New service detected with kumaprobe label: {service.name}"
-                        )
-
-            swarm_checked = True
+                        logger.info(f"New service detected with kumaprobe label: {service.name}")
 
         await asyncio.sleep(60)
 
