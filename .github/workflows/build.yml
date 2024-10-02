@@ -1,0 +1,77 @@
+name: Build Image
+
+on:
+  push: 
+  workflow_dispatch:
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  build-wheel:
+    runs-on: ubuntu-latst
+    steps:
+      - uses: actions/checkout@v4
+      - uses: eifinger/setup-rye@v4
+        with: 
+          enable-cache: true
+      - run: rye sync
+      - run: rye build --wheel --clean
+      - uses: actions/upload-artifact@v4
+        with: 
+          name: dist
+          path: dist
+
+  build-images:
+    needs: [ build-wheel ]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true 
+      matrix: 
+        arch: [ amd64, arm64v8 ]
+        include:
+          - arch: amd64
+            platform: linux/amd64
+          - arch: arm64v8
+            platform: linux/arm64
+    steps: 
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/metadata-action@v5
+        id: image-metadata
+        with: 
+          images: ghcr.io/kankerdev/kumaprobe
+          tags: |
+            type=raw,value=${{ matrix.arch }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with: 
+          name: dist
+      - uses: docker/build-push-action@v5
+        with:
+          push: true
+          platforms: ${{ matrix.platform }}
+          tags: ${{ steps.image-metadata.outputs.tags }}
+   
+
+
+  merge-images:
+    runs-on: ubuntu-20.04
+    needs: [ build-images ]
+    env: 
+      IMAGE: ghcr.io/kankerdev/kumaprobe
+    steps: 
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          docker buildx imagetools create \
+            --tag ${IMAGE}:latest ${IMAGE}:{amd64,arm64v8}
