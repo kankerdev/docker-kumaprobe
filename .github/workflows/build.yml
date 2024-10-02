@@ -26,6 +26,8 @@ jobs:
   build-images:
     needs: [ build-wheel ]
     runs-on: ubuntu-latest
+    env:
+      DOCK
     strategy:
       fail-fast: true 
       matrix: 
@@ -38,6 +40,7 @@ jobs:
     steps: 
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/metadata-action@v5
         id: image-metadata
         with: 
@@ -58,6 +61,8 @@ jobs:
           push: true
           platforms: ${{ matrix.platform }}
           tags: ${{ steps.image-metadata.outputs.tags }}
+          build-args: |
+            --mount=source=dist,target=/dist
    
 
 
