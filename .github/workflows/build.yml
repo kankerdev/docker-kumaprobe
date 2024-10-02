@@ -21,7 +21,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: 
           name: dist
-          path: dist
+          path: ./dist
 
   build-images:
     needs: [ build-wheel ]
@@ -51,8 +51,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/download-artifact@v4
         with: 
-          name: dist
-      - run: ls -lahn
+          name: ./dist
       - uses: docker/build-push-action@v5
         with:
           push: true
