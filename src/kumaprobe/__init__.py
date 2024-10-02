@@ -29,16 +29,29 @@ async def send_health_status(endpoint, status):
 async def check_health_and_send(container_or_service):
     labels = container_or_service.attrs.get("Config", {}).get("Labels", {})
 
-    if "health" in labels and "kumaprobe.endpoint" in labels:
-        health_status = container_or_service.attrs["State"]["Health"]["Status"]
-        endpoint = labels["kumaprobe.endpoint"]
+    # Log the labels for debugging purposes
+    logger.info(f"{container_or_service.name} Labels: {labels}")
 
-        if health_status == "healthy":
-            await send_health_status(endpoint, health_status)
+    if "kumaprobe.endpoint" in labels:
+        logger.info(f"Checking health status for {container_or_service.name}")
+
+        # Ensure "State" and "Health" exist in the attributes
+        if "State" in container_or_service.attrs and "Health" in container_or_service.attrs["State"]:
+            health_status = container_or_service.attrs["State"]["Health"]["Status"]
+            endpoint = labels["kumaprobe.endpoint"]
+
+            logger.info(f"Health status of {container_or_service.name}: {health_status}")
+
+            if health_status == "healthy":
+                await send_health_status(endpoint, health_status)
+            else:
+                logger.warning(
+                    f"{container_or_service.name} is not healthy: {health_status}"
+                )
         else:
-            logger.warning(
-                f"{container_or_service.name} is not healthy: {health_status}"
-            )
+            logger.warning(f"No health information found for {container_or_service.name}")
+    else:
+        logger.debug(f"No 'kumaprobe.endpoint' label found for {container_or_service.name}")
 
 
 async def check_active_containers():
@@ -98,6 +111,7 @@ async def async_main():
                     detected_containers.add(container.id)
                     logger.info(f"New container detected with kumaprobe label: {container.name}")
 
+        # Check the health of each container and send the status
         for container in current_containers:
             await check_health_and_send(container)
 
