@@ -67,24 +67,40 @@ async def async_main():
         logger.info("Swarm mode is active. Checking services.")
         services = await check_active_services()
 
-        # Log initially detected services
+        # Log initially detected services with labels starting with "kumaprobe"
         for service in services:
-            detected_services.add(service.id)
-            logger.info(f"Detected service: {service.name}")
+            labels = service.attrs.get("Spec", {}).get("Labels", {})
+            if any(label.startswith("kumaprobe") for label in labels):
+                detected_services.add(service.id)
+                logger.info(f"Detected service with kumaprobe label: {service.name}")
 
-    # Initial container check
+    # Initial container check (after services)
     containers = await check_active_containers()
     for container in containers:
-        detected_containers.add(container.id)
-        logger.info(f"Detected container: {container.name}")
+        labels = container.attrs.get("Config", {}).get("Labels", {})
+        if any(label.startswith("kumaprobe") for label in labels):
+            if (
+                container.id not in detected_services
+            ):  # Skip if already tracked as a service
+                detected_containers.add(container.id)
+                logger.info(
+                    f"Detected container with kumaprobe label: {container.name}"
+                )
 
     while True:
         # Check for new containers
         current_containers = await check_active_containers()
         for container in current_containers:
-            if container.id not in detected_containers:
-                detected_containers.add(container.id)
-                logger.info(f"New container detected: {container.name}")
+            labels = container.attrs.get("Config", {}).get("Labels", {})
+            if any(label.startswith("kumaprobe") for label in labels):
+                if (
+                    container.id not in detected_containers
+                    and container.id not in detected_services
+                ):
+                    detected_containers.add(container.id)
+                    logger.info(
+                        f"New container detected with kumaprobe label: {container.name}"
+                    )
 
         # Check health of all containers
         for container in current_containers:
@@ -94,9 +110,13 @@ async def async_main():
         if swarm_state == "active" and not swarm_checked:
             new_services = await check_active_services()
             for service in new_services:
-                if service.id not in detected_services:
-                    detected_services.add(service.id)
-                    logger.info(f"New service detected: {service.name}")
+                labels = service.attrs.get("Spec", {}).get("Labels", {})
+                if any(label.startswith("kumaprobe") for label in labels):
+                    if service.id not in detected_services:
+                        detected_services.add(service.id)
+                        logger.info(
+                            f"New service detected with kumaprobe label: {service.name}"
+                        )
 
             swarm_checked = True
 
