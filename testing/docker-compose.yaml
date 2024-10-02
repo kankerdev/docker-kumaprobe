@@ -1,0 +1,21 @@
+name: kumaprobe-testing
+
+services: 
+  kumaprobe:
+    restart: no  
+    build: ..
+    depends_on:
+      - sample-api
+
+  sample-api: 
+    build: ./sample-api/
+    ports: 
+      - target: 5000
+        published: 8080
+        protocol: tcp
+        mode: host
+
+networks:
+  default:
+    # internal: true
+    attachable: true

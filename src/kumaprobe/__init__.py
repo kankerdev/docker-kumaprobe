@@ -1,8 +1,9 @@
-import docker
 import asyncio
+import logging
+
+import docker
 import aiohttp
 import uvloop
-import logging
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -36,11 +37,16 @@ async def check_health_and_send(container_or_service):
         logger.info(f"Checking health status for {container_or_service.name}")
 
         # Ensure "State" and "Health" exist in the attributes
-        if "State" in container_or_service.attrs and "Health" in container_or_service.attrs["State"]:
+        if (
+            "State" in container_or_service.attrs
+            and "Health" in container_or_service.attrs["State"]
+        ):
             health_status = container_or_service.attrs["State"]["Health"]["Status"]
             endpoint = labels["kumaprobe.endpoint"]
 
-            logger.info(f"Health status of {container_or_service.name}: {health_status}")
+            logger.info(
+                f"Health status of {container_or_service.name}: {health_status}"
+            )
 
             if health_status == "healthy":
                 await send_health_status(endpoint, health_status)
@@ -49,9 +55,13 @@ async def check_health_and_send(container_or_service):
                     f"{container_or_service.name} is not healthy: {health_status}"
                 )
         else:
-            logger.warning(f"No health information found for {container_or_service.name}")
+            logger.warning(
+                f"No health information found for {container_or_service.name}"
+            )
     else:
-        logger.debug(f"No 'kumaprobe.endpoint' label found for {container_or_service.name}")
+        logger.debug(
+            f"No 'kumaprobe.endpoint' label found for {container_or_service.name}"
+        )
 
 
 async def check_active_containers():
@@ -100,16 +110,23 @@ async def async_main():
         if any(label.startswith("kumaprobe") for label in labels):
             if container.id not in detected_services:
                 detected_containers.add(container.id)
-                logger.info(f"Detected container with kumaprobe label: {container.name}")
+                logger.info(
+                    f"Detected container with kumaprobe label: {container.name}"
+                )
 
     while True:
         current_containers = await check_active_containers()
         for container in current_containers:
             labels = container.attrs.get("Config", {}).get("Labels", {})
             if any(label.startswith("kumaprobe") for label in labels):
-                if container.id not in detected_containers and container.id not in detected_services:
+                if (
+                    container.id not in detected_containers
+                    and container.id not in detected_services
+                ):
                     detected_containers.add(container.id)
-                    logger.info(f"New container detected with kumaprobe label: {container.name}")
+                    logger.info(
+                        f"New container detected with kumaprobe label: {container.name}"
+                    )
 
         # Check the health of each container and send the status
         for container in current_containers:
